@@ -1,0 +1,9 @@
+fastapi
+uvicorn[standard]
+psycopg2-binary
+supabase
+google-generativeai
+python-dotenv
+PyJWT
+feedparser
+requests
