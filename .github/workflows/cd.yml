@@ -7,32 +7,53 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    
+    permissions:
+      contents: read
+      id-token: write
 
     steps:
-    - uses: actions/checkout@v4
+    - name: Checkout code
+      uses: actions/checkout@v4
 
-    - name: Authenticate to GCP
+    - name: Authenticate to Google Cloud
       uses: google-github-actions/auth@v2
       with:
         credentials_json: ${{ secrets.GCP_SA_KEY }}
 
-    - name: Configure Docker for GCP
-      run: |
-        echo "Configure Docker"
-        gcloud --quiet auth configure-docker
+    - name: Set up Cloud SDK
+      uses: google-github-actions/setup-gcloud@v2
+      with:
+        project_id: ${{ secrets.GCP_PROJECT }}
 
-    - name: Build backend image
+    - name: Configure Docker for Artifact Registry
       run: |
-        docker build -t gcr.io/${{ secrets.GCP_PROJECT }}/${{ secrets.CLOUD_RUN_SERVICE }}:latest -f backend/Dockerfile .
+        gcloud auth configure-docker gcr.io
 
-    - name: Push image
+    - name: Build Docker image
       run: |
-        docker push gcr.io/${{ secrets.GCP_PROJECT }}/${{ secrets.CLOUD_RUN_SERVICE }}:latest
+        docker build -t gcr.io/${{ secrets.GCP_PROJECT }}/ai-supabase-agent:${{ github.sha }} \
+                     -t gcr.io/${{ secrets.GCP_PROJECT }}/ai-supabase-agent:latest .
+
+    - name: Push Docker image
+      run: |
+        docker push gcr.io/${{ secrets.GCP_PROJECT }}/ai-supabase-agent:${{ github.sha }}
+        docker push gcr.io/${{ secrets.GCP_PROJECT }}/ai-supabase-agent:latest
 
     - name: Deploy to Cloud Run
       run: |
-        gcloud run deploy ${{ secrets.CLOUD_RUN_SERVICE }} \
-          --image gcr.io/${{ secrets.GCP_PROJECT }}/${{ secrets.CLOUD_RUN_SERVICE }}:latest \
+        gcloud run deploy ai-supabase-agent \
+          --image gcr.io/${{ secrets.GCP_PROJECT }}/ai-supabase-agent:${{ github.sha }} \
           --region ${{ secrets.REGION }} \
           --platform managed \
-          --allow-unauthenticated
+          --allow-unauthenticated \
+          --set-env-vars SUPABASE_URL=${{ secrets.SUPABASE_URL }},SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }},GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }} \
+          --memory 512Mi \
+          --cpu 1 \
+          --max-instances 10 \
+          --min-instances 0 \
+          --port 8080
+    
+    - name: Show service URL
+      run: |
+        gcloud run services describe ai-supabase-agent --region ${{ secrets.REGION }} --format 'value(status.url)'
