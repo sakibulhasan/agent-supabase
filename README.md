@@ -1,98 +1,156 @@
 # AI Supabase Agent
 
-A FastAPI backend service that answers natural language questions against Supabase `income` and `expense` tables using AI.
+A FastAPI backend service that answers natural language questions against Supabase transaction tables using AI.
 
 ## Features
-- Natural-language questions -> SQL (Gemini AI) -> safe SELECT execution on Supabase
-- LLM-based summarization of results
+- Natural-language questions → SQL (Gemini AI) → safe SELECT execution on Supabase
+- LLM-based summarization of query results with insights
 - RESTful API with CORS support
-- CI/CD with GitHub Actions to build and deploy to Cloud Run
+- Automated CI/CD with GitHub Actions deploying to Google Cloud Run
+
+## Live Demo
+🚀 **Deployed at**: https://ai-supabase-agent-b3l4e7s4eq-uc.a.run.app
 
 ## Prerequisites
-- Supabase project (Postgres) with `income` and `expense` tables
+- Supabase project (Postgres) with transaction tables
 - Google Gemini API key
 - Python 3.11+
+- Google Cloud Project (for deployment)
 
-## Setup
+## Local Development Setup
 
-1. Create a virtual environment and install dependencies
+1. **Create a virtual environment and install dependencies**
 ```bash
-python -m venv .venv
+python3 -m venv .venv
 source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-2. Configure environment variables
+2. **Configure environment variables**
 
-Copy `.env.example` to `.env` and fill in your credentials:
+Create a `.env` file in the project root:
 ```bash
-cp .env.example .env
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_ANON_KEY=your_supabase_anon_key
+GEMINI_API_KEY=your_gemini_api_key
 ```
 
-Edit `.env`:
-```bash
-SUPABASE_DB_URL=postgresql://user:password@host:port/database
-GEMINI_API_KEY=your_gemini_api_key_here
-JWT_SECRET=your_jwt_secret_here_at_least_32_characters_long
-```
+**Where to get credentials:**
+- **Supabase**: Dashboard → Settings → API
+- **Gemini API**: https://makersuite.google.com/app/apikey
 
-3. Run the server
+3. **Run the server locally**
 ```bash
-# Unset Google Cloud credentials to avoid conflicts
-unset GOOGLE_APPLICATION_CREDENTIALS
-unset GCLOUD_PROJECT
-
+source .venv/bin/activate
 uvicorn main:app --reload --host 0.0.0.0 --port 8080
 ```
 
-## API Usage
+Server will start at: http://localhost:8080
+
+## API Endpoints
 
 ### Health Check
 ```bash
-curl http://localhost:8080/
+curl https://ai-supabase-agent-b3l4e7s4eq-uc.a.run.app/
 ```
+**Response:** `{"status":"ok"}`
 
 ### Ask a Question
 ```bash
-curl -X POST "http://localhost:8080/ask" \
+curl -X POST "https://ai-supabase-agent-b3l4e7s4eq-uc.a.run.app/ask" \
   -H "Content-Type: application/json" \
-  -d '{"question": "What is the total income last month?"}'
+  -d '{"question": "What are the total expenses?"}'
 ```
 
 **Response:**
 ```json
 {
-  "question": "What is the total income last month?",
-  "sql": "SELECT SUM(price) FROM income WHERE date >= DATE_TRUNC('month', CURRENT_DATE - INTERVAL '1 month')...",
-  "rows": [...],
-  "summary": "The total income last month was $X,XXX..."
+  "question": "What are the total expenses?",
+  "sql": "SELECT SUM(total_price) FROM transactions_expense",
+  "rows": [{"sum": 62267809}],
+  "summary": "The total expenses amount to 62,267,809..."
 }
 ```
 
-## Deploy to Cloud Run
+**Example Questions:**
+- "What are the total expenses?"
+- "Show me the top 5 highest expenses"
+- "What was spent on advertising this year?"
+- "List all vendor payments over $100,000"
 
-1. Build and push Docker image
+## CI/CD Pipeline
+
+The project uses GitHub Actions for automated deployment to Google Cloud Run.
+
+### Workflow
+1. **CI** (Continuous Integration) - Runs on push to `main`
+   - Lints Python code
+   - Validates syntax
+   - Runs tests
+
+2. **CD** (Continuous Deployment) - Runs after CI succeeds
+   - Builds Docker image
+   - Pushes to Google Container Registry
+   - Deploys to Cloud Run
+   - Sets environment variables
+
+### Required GitHub Secrets
+
+Set these in your GitHub repository (Settings → Secrets and variables → Actions):
+
+| Secret | Description | Where to Get |
+|--------|-------------|--------------|
+| `GCP_SA_KEY` | Service account JSON key | Google Cloud Console → IAM & Admin → Service Accounts |
+| `GCP_PROJECT` | GCP project ID | Top of GCP Console |
+| `REGION` | Deployment region | e.g., `us-central1` |
+| `SUPABASE_URL` | Supabase project URL | Supabase Dashboard → Settings → API |
+| `SUPABASE_ANON_KEY` | Supabase anonymous key | Supabase Dashboard → Settings → API |
+| `GEMINI_API_KEY` | Google Gemini API key | https://makersuite.google.com/app/apikey |
+
+### Setting up GCP Service Account
+
+1. Go to Google Cloud Console → IAM & Admin → Service Accounts
+2. Create service account: `github-actions-sa`
+3. Grant roles:
+   - Cloud Run Admin
+   - Storage Admin
+   - Service Account User
+   - Artifact Registry Writer
+4. Create JSON key and add to GitHub Secrets as `GCP_SA_KEY`
+5. Enable required APIs:
+   - Cloud Run API
+   - Container Registry API
+   - Cloud Build API
+
+### Manual Deployment
+
+If needed, deploy manually:
 ```bash
+# Build image
 docker build -t gcr.io/PROJECT_ID/ai-supabase-agent:latest .
-docker push gcr.io/PROJECT_ID/ai-supabase-agent:latest
-```
 
-2. Deploy to Cloud Run
-```bash
+# Push to registry
+docker push gcr.io/PROJECT_ID/ai-supabase-agent:latest
+
+# Deploy to Cloud Run
 gcloud run deploy ai-supabase-agent \
   --image gcr.io/PROJECT_ID/ai-supabase-agent:latest \
   --region us-central1 \
   --platform managed \
   --allow-unauthenticated \
-  --set-env-vars SUPABASE_DB_URL=$SUPABASE_DB_URL,GEMINI_API_KEY=$GEMINI_API_KEY,JWT_SECRET=$JWT_SECRET
+  --set-env-vars SUPABASE_URL=$SUPABASE_URL,SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY,GEMINI_API_KEY=$GEMINI_API_KEY
 ```
 
-## GitHub Actions CI/CD
+## Architecture
 
-Required GitHub Secrets:
-- `GCP_SA_KEY` - Service account JSON key
-- `GCP_PROJECT` - Your GCP project ID
-- `CLOUD_RUN_SERVICE` - Service name
-- `REGION` - Deployment region
+```
+User Question → FastAPI → Gemini AI → SQL Query → Supabase → Results → AI Summary → Response
+```
 
-**NOTE: Never commit sensitive credentials to the repository. Use environment variables and GitHub Secrets.**
+## Security Notes
+
+- ✅ Only SELECT queries are allowed
+- ✅ Environment variables for all credentials
+- ✅ Never commit `.env` file
+- ✅ Service account with minimal required permissions
+- ✅ CORS configured for specific origins
