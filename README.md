@@ -5,11 +5,24 @@ A FastAPI backend service that answers natural language questions against Supaba
 ## Features
 - Natural-language questions → SQL (Gemini AI) → safe SELECT execution on Supabase
 - LLM-based summarization of query results with insights
+- Context-aware query generation (fetches categories and payment methods from database)
 - RESTful API with CORS support
-- Automated CI/CD with GitHub Actions deploying to Google Cloud Run
+- Automated deployments via Render.com
 
-## Live Demo
-🚀 **Deployed at**: https://ai-supabase-agent-b3l4e7s4eq-uc.a.run.app
+## 🚀 Quick Deploy to Render.com
+
+**See [RENDER_QUICKSTART.md](RENDER_QUICKSTART.md) for 5-minute deployment guide!**
+
+Or follow these steps:
+1. Push this repo to GitHub
+2. Sign up at https://render.com with GitHub
+3. Create new Web Service from your repository
+4. Add environment variables (see below)
+5. Deploy! 🎉
+
+**Automatic deployments**: Every push to `main` branch auto-deploys!
+
+---
 
 ## Prerequisites
 - Supabase project (Postgres) with transaction tables
